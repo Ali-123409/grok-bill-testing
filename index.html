@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GEPCO Real Bill Checker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    iframe { background: white; border: none; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen py-8 px-4">
+  <div class="max-w-xl mx-auto bg-white rounded-3xl shadow-2xl p-8">
+    <h1 class="text-4xl font-bold text-center text-green-700 mb-2">GEPCO Bill Checker</h1>
+    <p class="text-center text-gray-600 mb-8">Enter 14-digit reference number</p>
+
+    <input id="ref" type="text" maxlength="14" placeholder="12345678901234"
+      class="w-full text-2xl border-2 border-gray-300 rounded-2xl px-6 py-5 focus:border-green-600 outline-none">
+
+    <button onclick="checkBill()" id="btn"
+      class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold text-xl py-5 rounded-2xl transition">
+      View Real Official Bill
+    </button>
+
+    <p id="status" class="text-center text-red-600 mt-4 hidden"></p>
+  </div>
+
+  <div id="billContainer" class="mt-12 hidden bg-white rounded-3xl shadow-2xl overflow-hidden">
+    <iframe id="billFrame" class="w-full h-[850px]"></iframe>
+    <div class="text-center text-sm text-gray-500 py-4 bg-gray-50">
+      ✅ This is the exact official GEPCO bill from PITC
+    </div>
+  </div>
+
+  <script>
+    async function checkBill() {
+      const refNo = document.getElementById('ref').value.trim();
+      const btn = document.getElementById('btn');
+      const status = document.getElementById('status');
+      const container = document.getElementById('billContainer');
+
+      if (refNo.length !== 14) {
+        status.textContent = 'Must be exactly 14 digits';
+        status.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+      status.classList.add('hidden');
+      container.classList.add('hidden');
+
+      try {
+        const formUrl = 'https://bill.pitc.com.pk/gepcobill';
+        const proxy = 'https://corsproxy.io/?';
+
+        // Step 1: Get fresh tokens via proxy
+        const getRes = await fetch(proxy + encodeURIComponent(formUrl));
+        const html = await getRes.text();
+
+        const viewState = html.match(/__VIEWSTATE" value="([^"]*)"/)?.[1] || '';
+        const viewStateGen = html.match(/__VIEWSTATEGENERATOR" value="([^"]*)"/)?.[1] || '';
+        const eventValidation = html.match(/__EVENTVALIDATION" value="([^"]*)"/)?.[1] || '';
+
+        if (!viewState) throw new Error('Blocked');
+
+        // Step 2: Submit POST via proxy
+        const formData = new URLSearchParams();
+        formData.append('__VIEWSTATE', viewState);
+        formData.append('__VIEWSTATEGENERATOR', viewStateGen);
+        formData.append('__EVENTVALIDATION', eventValidation);
+        formData.append('ctl00$ContentPlaceHolder1$txtReferenceNo', refNo);
+        formData.append('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
+
+        const postRes = await fetch(proxy + encodeURIComponent(formUrl), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+          },
+          body: formData.toString()
+        });
+
+        const billHtml = await postRes.text();
+
+        // Show real bill
+        document.getElementById('billFrame').srcdoc = billHtml;
+        container.classList.remove('hidden');
+
+      } catch (e) {
+        status.textContent = 'Still blocked. Try again in 30 sec or use official site.';
+        status.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'View Real Official Bill';
+      }
+    }
+  </script>
+</body>
+</html>
