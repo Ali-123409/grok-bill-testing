@@ -3,104 +3,118 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GEPCO Real Bill Checker</title>
+  <title>GEPCO Bill Test</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>iframe { background: white; border: none; }</style>
 </head>
-<body class="bg-gray-100 min-h-screen py-8 px-4">
-  <div class="max-w-xl mx-auto bg-white rounded-3xl shadow-2xl p-8">
-    <h1 class="text-4xl font-bold text-center text-green-700 mb-2">GEPCO Bill Checker</h1>
-    <p class="text-center text-gray-600 mb-8">Enter 14-digit reference number</p>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
-    <input id="ref" type="text" maxlength="14" placeholder="12345678901234"
-      class="w-full text-2xl border-2 border-gray-300 rounded-2xl px-6 py-5 focus:border-green-600 outline-none">
+  <div class="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full">
+    
+    <div class="text-center mb-6">
+      <h2 class="text-2xl font-bold text-gray-900">GEPCO Bill Checker</h2>
+      <p class="text-sm text-gray-500">Pure HTML Test Version</p>
+    </div>
 
-    <button onclick="checkBill()" id="btn"
-      class="mt-6 w-full bg-green-600 hover:bg-green-700 text-white font-bold text-xl py-5 rounded-2xl transition">
-      View Real Official Bill
+    <div class="flex gap-2 mb-4">
+      <button id="tabRefno" class="flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white transition-colors" onclick="switchTab('refno')">
+        Reference Number
+      </button>
+      <button id="tabCustid" class="flex-1 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 transition-colors" onclick="switchTab('custid')">
+        Consumer ID
+      </button>
+    </div>
+
+    <div class="mb-4">
+      <input
+        id="billInput"
+        type="text"
+        class="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:border-blue-500 outline-none font-mono text-lg"
+        placeholder="Enter 14-digit Reference"
+        inputmode="numeric"
+        autocomplete="off"
+      />
+    </div>
+
+    <button id="checkBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-md" onclick="doCheckBill()">
+      Check Bill Now
     </button>
 
-    <p id="status" class="text-center mt-4 text-red-600 font-medium"></p>
-  </div>
+    <div id="statusBox" class="mt-4 hidden p-3 rounded-lg text-sm font-medium bg-red-50 text-red-700 border border-red-200 text-center"></div>
 
-  <div id="billContainer" class="mt-12 hidden bg-white rounded-3xl shadow-2xl overflow-hidden">
-    <iframe id="billFrame" class="w-full h-[850px]"></iframe>
-    <p class="text-center text-sm text-gray-500 py-4 bg-gray-50">✅ Exact official GEPCO bill from PITC</p>
   </div>
 
   <script>
-    const proxies = [
-      'https://corsproxy.io/?url=',           // Proxy 1
-      'https://api.allorigins.win/raw?url=',  // Proxy 2
-      'https://thingproxy.freeboard.io/fetch/', // Proxy 3
-      'https://api.codetabs.com/v1/proxy?quest=' // Proxy 4 (extra backup)
-    ];
+    let currentTab = 'refno';
+    
+    const input = document.getElementById('billInput');
+    const tabRefno = document.getElementById('tabRefno');
+    const tabCustid = document.getElementById('tabCustid');
+    const statusBox = document.getElementById('statusBox');
 
-    async function checkBill() {
-      const refNo = document.getElementById('ref').value.trim();
-      const btn = document.getElementById('btn');
-      const status = document.getElementById('status');
-      const container = document.getElementById('billContainer');
+    // Restrict input to numbers only
+    input.addEventListener('input', function(e) {
+      this.value = this.value.replace(/[^0-9]/g, '');
+    });
 
-      if (refNo.length !== 14) {
-        status.textContent = 'Must be exactly 14 digits';
+    // Check bill on "Enter" key
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doCheckBill();
+    });
+
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      if (tab === 'refno') {
+        input.placeholder = 'Enter 14-digit Reference';
+        input.maxLength = 14;
+        tabRefno.className = 'flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white transition-colors';
+        tabCustid.className = 'flex-1 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 transition-colors';
+      } else {
+        input.placeholder = 'Enter 10-digit Consumer ID';
+        input.maxLength = 10;
+        tabCustid.className = 'flex-1 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white transition-colors';
+        tabRefno.className = 'flex-1 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 transition-colors';
+      }
+      
+      input.value = '';
+      statusBox.classList.add('hidden');
+    }
+
+    function doCheckBill() {
+      const val = input.value;
+      
+      // Basic validation
+      if (currentTab === 'refno' && val.length !== 14) {
+        showError('Please enter exactly 14 digits.');
+        return;
+      }
+      if (currentTab === 'custid' && val.length !== 10) {
+        showError('Please enter exactly 10 digits.');
         return;
       }
 
-      btn.disabled = true;
-      btn.textContent = 'Trying all proxies...';
-      status.textContent = '';
-      container.classList.add('hidden');
+      statusBox.classList.add('hidden');
 
-      const formUrl = 'https://bill.pitc.com.pk/gepcobill';
+      // THE CORE LOGIC: Hit the legacy .aspx endpoint, not /general
+      const param = currentTab === 'refno' ? 'refno' : 'appno';
+      const finalURL = `https://bill.pitc.com.pk/gbill.aspx?${param}=${val}`;
 
-      for (let i = 0; i < proxies.length; i++) {
-        const proxy = proxies[i];
-        status.textContent = `Trying proxy ${i+1} of ${proxies.length}...`;
+      console.log("Attempting to open:", finalURL);
 
-        try {
-          // Get tokens
-          const getRes = await fetch(proxy + encodeURIComponent(formUrl));
-          const html = await getRes.text();
+      // THE STEALTH REDIRECT: Hides where the click came from
+      const link = document.createElement('a');
+      link.href = finalURL;
+      link.target = '_blank';
+      link.rel = 'noreferrer noopener'; // This is the magic that bypasses PITC's block
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
 
-          const viewState = html.match(/__VIEWSTATE" value="([^"]*)"/)?.[1] || '';
-          const viewStateGen = html.match(/__VIEWSTATEGENERATOR" value="([^"]*)"/)?.[1] || '';
-          const eventValidation = html.match(/__EVENTVALIDATION" value="([^"]*)"/)?.[1] || '';
-
-          if (!viewState) throw new Error('No tokens');
-
-          // Submit bill
-          const formData = new URLSearchParams();
-          formData.append('__VIEWSTATE', viewState);
-          formData.append('__VIEWSTATEGENERATOR', viewStateGen);
-          formData.append('__EVENTVALIDATION', eventValidation);
-          formData.append('ctl00$ContentPlaceHolder1$txtReferenceNo', refNo);
-          formData.append('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
-
-          const postRes = await fetch(proxy + encodeURIComponent(formUrl), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData.toString()
-          });
-
-          const billHtml = await postRes.text();
-          document.getElementById('billFrame').srcdoc = billHtml;
-          container.classList.remove('hidden');
-          status.textContent = `✅ Success using proxy ${i+1}`;
-          btn.disabled = false;
-          btn.textContent = 'View Real Official Bill';
-          return;   // STOP — we got the bill!
-
-        } catch (e) {
-          // try next proxy
-        }
-      }
-
-      // All proxies failed
-      status.innerHTML = `All 4 free proxies blocked by PITC.<br>
-        <strong>Use Pakistani hosting (000webhost) for real IP.</strong>`;
-      btn.disabled = false;
-      btn.textContent = 'View Real Official Bill';
+    function showError(msg) {
+      statusBox.innerText = '⚠️ ' + msg;
+      statusBox.classList.remove('hidden');
     }
   </script>
 </body>
